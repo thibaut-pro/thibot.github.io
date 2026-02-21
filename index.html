@@ -14,17 +14,35 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
         }
 
         .container {
             text-align: center;
             color: white;
             max-width: 600px;
+            position: relative;
+            z-index: 1;
         }
 
         .profile-image {
@@ -33,16 +51,23 @@
             border-radius: 50%;
             margin-bottom: 2rem;
             border: 4px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            animation: fadeIn 0.6s ease;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 0 40px rgba(118, 75, 162, 0.4);
+            animation: float 3s ease-in-out infinite, fadeIn 0.6s ease;
             object-fit: cover;
+            transition: all 0.3s ease;
+        }
+
+        .profile-image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4), 0 0 60px rgba(118, 75, 162, 0.6);
         }
 
         h1 {
             font-size: 4rem;
             margin-bottom: 1rem;
             font-weight: 700;
-            animation: fadeInDown 0.8s ease;
+            animation: fadeInDown 0.8s ease, glow 2s ease-in-out infinite alternate;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
         }
 
         .subtitle {
@@ -117,6 +142,53 @@
             }
         }
 
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        @keyframes gradientShift {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+            }
+            to {
+                text-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 30px rgba(255, 255, 255, 0.4);
+            }
+        }
+
+        #neural-network {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .typing-text {
+            font-family: 'Courier New', monospace;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            min-height: 1.5rem;
+        }
+
         @media (max-width: 768px) {
             .profile-image {
                 width: 120px;
@@ -135,16 +207,301 @@
     </style>
 </head>
 <body>
+    <canvas id="neural-network"></canvas>
     <div class="container">
-        <img src="thibot.png" alt="Thibot" class="profile-image">
+        <img src="thibot.png" alt="Thibot" class="profile-image" id="robot-img">
         <h1>Thibot</h1>
         <p class="subtitle">Thibaut's Robot</p>
         <p class="description">
             Welcome to my robot landing page. Beep boop!
         </p>
+        <p class="typing-text" id="ai-text"></p>
         <div class="links">
             <a href="https://github.com/thibaut-pro" class="link">GitHub</a>
         </div>
     </div>
+
+    <script>
+        // Data Cable Animation
+        const canvas = document.getElementById('neural-network');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initCables();
+        });
+
+        const robotImg = document.getElementById('robot-img');
+        const cables = [];
+        const signals = [];
+        const mouse = { x: null, y: null };
+
+        class Cable {
+            constructor(startX, startY) {
+                this.startX = startX;
+                this.startY = startY;
+                this.thickness = Math.random() * 2 + 1;
+                this.waveOffset = Math.random() * Math.PI * 2;
+                this.waveSpeed = Math.random() * 0.02 + 0.01;
+                this.glowIntensity = 0;
+                this.mouseInfluence = 0;
+            }
+
+            update(targetX, targetY) {
+                this.targetX = targetX;
+                this.targetY = targetY;
+
+                this.waveOffset += this.waveSpeed;
+
+                // Pulse glow effect
+                this.glowIntensity = Math.sin(Date.now() * 0.001 + this.waveOffset) * 0.3 + 0.7;
+
+                // Check mouse distance
+                if (mouse.x !== null && mouse.y !== null && this.points) {
+                    let minDist = Infinity;
+                    this.points.forEach(point => {
+                        const dx = mouse.x - point.x;
+                        const dy = mouse.y - point.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        minDist = Math.min(minDist, dist);
+                    });
+
+                    // Increase glow when mouse is near
+                    if (minDist < 100) {
+                        this.mouseInfluence = (1 - minDist / 100) * 0.5;
+                    } else {
+                        this.mouseInfluence *= 0.9;
+                    }
+                } else {
+                    this.mouseInfluence *= 0.9;
+                }
+            }
+
+            draw() {
+                const points = [];
+                const segments = 50;
+
+                // Create wavy cable path
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    const x = this.startX + (this.targetX - this.startX) * t;
+                    const y = this.startY + (this.targetY - this.startY) * t;
+
+                    // Add wave effect
+                    const wave = Math.sin(t * Math.PI * 2 + this.waveOffset) * 20 * (1 - t);
+                    const perpX = -(this.targetY - this.startY);
+                    const perpY = (this.targetX - this.startX);
+                    const length = Math.sqrt(perpX * perpX + perpY * perpY);
+
+                    points.push({
+                        x: x + (perpX / length) * wave,
+                        y: y + (perpY / length) * wave
+                    });
+                }
+
+                // Draw cable glow
+                const glowOpacity = (0.15 * this.glowIntensity) + this.mouseInfluence;
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x, points[i].y);
+                }
+                ctx.strokeStyle = `rgba(100, 200, 255, ${glowOpacity})`;
+                ctx.lineWidth = this.thickness + 6 + (this.mouseInfluence * 4);
+                ctx.stroke();
+
+                // Draw cable core
+                const coreOpacity = (0.6 * this.glowIntensity) + this.mouseInfluence;
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x, points[i].y);
+                }
+                ctx.strokeStyle = `rgba(200, 220, 255, ${coreOpacity})`;
+                ctx.lineWidth = this.thickness + (this.mouseInfluence * 2);
+                ctx.stroke();
+
+                // Store points for signals
+                this.points = points;
+            }
+        }
+
+        class Signal {
+            constructor(cable) {
+                this.cable = cable;
+                this.progress = Math.random();
+                this.speed = 0.005 + Math.random() * 0.01;
+                this.direction = Math.random() > 0.5 ? 1 : -1;
+                this.size = Math.random() * 4 + 3;
+                this.color = Math.random() > 0.5 ?
+                    'rgba(100, 200, 255, 0.9)' :
+                    'rgba(150, 220, 255, 0.9)';
+            }
+
+            update() {
+                this.progress += this.speed * this.direction;
+
+                // Bounce back and forth
+                if (this.progress > 1) {
+                    this.progress = 1;
+                    this.direction *= -1;
+                } else if (this.progress < 0) {
+                    this.progress = 0;
+                    this.direction *= -1;
+                }
+            }
+
+            draw() {
+                if (!this.cable.points) return;
+
+                const index = Math.floor(this.progress * (this.cable.points.length - 1));
+                const point = this.cable.points[index];
+
+                if (!point) return;
+
+                // Draw glow
+                const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, this.size * 2);
+                gradient.addColorStop(0, this.color);
+                gradient.addColorStop(0.5, this.color.replace('0.9', '0.4'));
+                gradient.addColorStop(1, this.color.replace('0.9', '0'));
+
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, this.size * 2, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                // Draw core
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        function initCables() {
+            cables.length = 0;
+            signals.length = 0;
+
+            // Create cables from each side of the screen
+            const cableCount = 20;
+
+            for (let i = 0; i < cableCount; i++) {
+                let startX, startY;
+                const side = Math.floor(Math.random() * 4);
+
+                switch(side) {
+                    case 0: // Top
+                        startX = Math.random() * canvas.width;
+                        startY = 0;
+                        break;
+                    case 1: // Right
+                        startX = canvas.width;
+                        startY = Math.random() * canvas.height;
+                        break;
+                    case 2: // Bottom
+                        startX = Math.random() * canvas.width;
+                        startY = canvas.height;
+                        break;
+                    case 3: // Left
+                        startX = 0;
+                        startY = Math.random() * canvas.height;
+                        break;
+                }
+
+                const cable = new Cable(startX, startY);
+                cables.push(cable);
+
+                // Add 2-4 signals per cable
+                const signalCount = Math.floor(Math.random() * 3) + 2;
+                for (let j = 0; j < signalCount; j++) {
+                    signals.push(new Signal(cable));
+                }
+            }
+        }
+
+        initCables();
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Get robot image position
+            const rect = robotImg.getBoundingClientRect();
+            const targetX = rect.left + rect.width / 2;
+            const targetY = rect.top + rect.height / 2;
+
+            // Update and draw cables
+            cables.forEach(cable => {
+                cable.update(targetX, targetY);
+                cable.draw();
+            });
+
+            // Update and draw signals
+            signals.forEach(signal => {
+                signal.update();
+                signal.draw();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        // AI Typing Effect
+        const messages = [
+            '> Initializing neural networks...',
+            '> Processing quantum algorithms...',
+            '> Analyzing data patterns...',
+            '> Optimizing AI responses...',
+            '> System online and learning...'
+        ];
+        let messageIndex = 0;
+        let charIndex = 0;
+        const aiText = document.getElementById('ai-text');
+
+        function typeMessage() {
+            if (charIndex < messages[messageIndex].length) {
+                aiText.textContent += messages[messageIndex].charAt(charIndex);
+                charIndex++;
+                setTimeout(typeMessage, 50);
+            } else {
+                setTimeout(() => {
+                    charIndex = 0;
+                    aiText.textContent = '';
+                    messageIndex = (messageIndex + 1) % messages.length;
+                    typeMessage();
+                }, 3000);
+            }
+        }
+
+        setTimeout(typeMessage, 1000);
+
+        // Mouse tracking
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+
+        window.addEventListener('mouseout', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+
+        // Robot image click interaction
+        robotImg.addEventListener('click', () => {
+            // Burst of signals when clicked
+            cables.forEach(cable => {
+                for (let i = 0; i < 3; i++) {
+                    const newSignal = new Signal(cable);
+                    newSignal.speed = 0.02 + Math.random() * 0.02;
+                    newSignal.size = Math.random() * 6 + 5;
+                    signals.push(newSignal);
+                }
+            });
+        });
+    </script>
 </body>
 </html>
